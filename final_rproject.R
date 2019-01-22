@@ -141,9 +141,6 @@ ggplot(data_train, aes(as.factor(stroke), avg_glucose_level))+
 #                               DATA PREPARATION
 #============================================================================================
 
-table(data_train$smoking_status)
-prop.table(table(validate_without_smoke$stroke))
-
 #converting type to factors
 data_train$hypertension = as.factor(data_train$hypertension)
 
@@ -213,7 +210,7 @@ prop.table(table(data_balanced_both_smoke$stroke))
 data.rose_smoke <- ROSE(stroke ~ ., data = train_smoke, seed = 1)$data
 table(data.rose_smoke$stroke)
 prop.table(table(data.rose_smoke$stroke))
-nrow(data.rose_smoke)
+
 
 #=======================================================================
 #                    BALANCING NON-SMOKE DATA
@@ -246,7 +243,7 @@ prop.table(table(data_balanced_both_nonsmoke$stroke))
 data.rose_nonsmoke <- ROSE(stroke ~ ., data = train_without_smoke, seed = 1)$data
 table(data.rose_smoke$stroke)
 prop.table(table(data.rose_nonsmoke$stroke))
-nrow(data.rose_nonsmoke)
+
 #write to csv
 write.csv(validate_without_smoke, file = "C:/Users/Vinay/Downloads/validate_nonsmoke.csv", row.names = FALSE)
 
@@ -316,7 +313,7 @@ step(Model_With_Smoke_Data_under,direction = 'both')
 #==========================================================================================
 
 #=========================INFORMATION VALUE================================================
-IvValues<-create_infotables(data = data_balanced_under_nonsmoke,y="stroke")
+IvValues<-create_infotables(data = data_balanced_over_nonsmoke,y="stroke")
 print(IvValues$Summary, row.names = F)
 aa<-IvValues$Summary > 0.02
 aa
@@ -329,7 +326,7 @@ drops <- c('Residence_type','id')
 data_balanced_over_nonsmoke1<-data_balanced_over_nonsmoke[ , !(names(data_balanced_over_nonsmoke) %in% drops)]
 
 #============================USING STEP FUNCTION=========================================
-Model_With_nonSmoke_Data_over = glm(stroke ~., data = data_balanced_under_nonsmoke,family="binomial")
+Model_With_nonSmoke_Data_over = glm(stroke ~., data = data_balanced_over_nonsmoke1,family="binomial")
 summary(Model_With_Smoke_Data_under)
 step(Model_With_nonSmoke_Data_over,direction = 'both')
 
@@ -338,5 +335,316 @@ drops <- c('stroke','gender','age','hypertension','heart_disease','work_type','a
 data_balanced_over_nonsmoke11<-data_balanced_over_nonsmoke1[ , (names(data_balanced_over_nonsmoke1) %in% drops)]
 
 #write to csv
-write.csv(validate_without_smoke, file = "C:/Users/Vinay/Downloads/validate_nonsmoke1.csv", row.names = FALSE)
+write.csv(data_balanced_over_nonsmoke1, file = "C:/Users/Vinay/Downloads/data_balanced_over_nonsmoke11.csv", row.names = FALSE)
 View(data_balanced_over_nonsmoke1)
+
+
+
+#--------------------------------------------------------------------------------------------------
+#            FITTING LOGISTIC REGRESSION considering SMOKING STATUS As a Factor in Data
+#---------------------------------------------------------------------------------------------------
+
+# Calling required libraries
+library(caTools)
+library(caret)
+library(pROC)
+library(InformationValue)
+
+
+# Lodaing train and test data
+data=read.csv("G:\\Analytics_Praxis\\R\\R-Data\\data_balanced_over_smoke11.csv")
+View(data)
+testdata=read.csv("G:\\Analytics_Praxis\\R\\R-Data\\validate_smoke.csv")
+View(testdata)
+
+#Checks for proportion of strokes in both the data
+prop.table(table(data$stroke))*100
+prop.table(table(testdata$stroke))*100
+
+#------------------------------------------------------------------------------------------------
+# MODEL 1
+#Fitting a logistic model on the train data
+#-------------------------------------------------------------------------------------------------
+
+model_smoke = glm(stroke~.,data=data,family = binomial)
+#its a binomial so we are passing binomial in the family
+
+summary(model_smoke)# Summary of the model fitted
+
+# Predicting values for stroke in test data set
+pred=predict(model_smoke,newdata =testdata[-12],type = 'response' )
+# Setting a threshold of 0.5
+pred<-ifelse(pred>0.5,1,0)
+
+#---------------------------------------------------------------------------------------------------
+# Evaluating the model 1
+#---------------------------------------------------------------------------------------------------
+# confusiom Matrix - built inside caret package
+confusionMatrix(table(pred,testdata$stroke),positive = '1')
+
+# Calculating seperately these values
+# this functions are in built inside package Informationvalue
+table(testdata$stroke,pred)
+misClassError(testdata$stroke,pred)
+sensitivity(testdata$stroke,pred)
+specificity(testdata_nonsmoke$stroke,pred)
+precision(testdata$stroke,pred)
+pre=precision(testdata$stroke,pred)
+recall=sensitivity(testdata$stroke,pred)
+# Calculating F1 score for test data
+F_i = (1+i^2)*pre*recall/((i^2 * pre)+recall)
+F_i
+
+
+#Plotting an ROC curve 
+#-----------------------------------------------------------------------------------
+# roc is built inside pROC package
+auc <- roc(testdata$stroke, pred)
+print(auc)
+
+## Area under the curve: 0.75
+plot(auc, ylim=c(0,1), main=paste('AUC:',round(auc1$auc[[1]],2)))
+abline(h=1,col='blue',lwd=2)
+abline(h=0,col='red',lwd=2)
+
+#Concordance and Discordance
+#------------------------------------------------------------------------
+conc=Concordance(testdata$stroke,pred)
+conc
+
+
+
+
+#----------------------------------------------------------------------------------------------
+#       FITTING LOGISTIC REGRESSION by NOT considering SMOKING STATUS As a Factor in Data
+#---------------------------------------------------------------------------------------------
+
+# Lodaing train and test data
+data_nosmoke=read.csv("G:\\Analytics_Praxis\\R\\R-Data\\data_balanced_over_nonsmoke11.csv")
+View(data_nosmoke)
+testdata_nonsmoke=read.csv("G:\\Analytics_Praxis\\R\\R-Data\\validate_nonsmoke1.csv")
+View(testdata_nonsmoke)
+nrow(testdata_nonsmoke)
+
+
+#Checks for proportion of strokes in both the data
+table(data_nosmoke$stroke)
+table(testdata_nonsmoke$stroke)
+
+#------------------------------------------------------------------------------------------------
+# MODEL 2
+#Fitting a logistic model on the train data
+#-------------------------------------------------------------------------------------------------
+
+model_nosmoke = glm(stroke~.,data=data_nosmoke,family = binomial)
+#its a binomial so we are passing binomial in the family
+
+summary(model_nosmoke)   # Summary of the model
+
+# Predicting values for stroke in test data set
+pred_nosmoke=predict(model_nosmoke,newdata =testdata_nonsmoke[-11],type = 'response' )
+pred_nosmoke<-ifelse(pred_nosmoke>0.5,1,0)
+
+#---------------------------------------------------------------------------------------------------
+# Evaluating the model 2
+#---------------------------------------------------------------------------------------------------
+
+# confusiom Matrix 
+#-----------------------------------------------------------
+# Calculating seperately these values
+# this functions are in built inside package Informationvalue
+table(testdata_nonsmoke$stroke,pred_nosmoke)
+misClassError(testdata_nonsmoke$stroke,pred_nosmoke)
+sensitivity(testdata_nonsmoke$stroke,pred_nosmoke)
+specificity(testdata_nonsmoke$stroke,pred_nosmoke)
+precision(testdata_nonsmoke$stroke,pred_nosmoke)
+#Accu=(2105+19)/(2105+534+20)
+#Accu
+
+
+
+#Plotting an ROC curve (Choosing Cut-off using ROC curve)
+#------------------------------------------------------------------------
+# roc is built inside pROC package
+auc1 <- roc(testdata_nonsmoke$stroke, pred_nosmoke)
+print(auc1)
+# Auc is 0.87
+plot(auc1, ylim=c(0,1), main=paste('AUC:',round(auc1$auc[[1]],2)))
+abline(h=1,col='blue',lwd=2)
+abline(h=0,col='red',lwd=2)
+
+#Concordance and Discordance
+#------------------------------------------------------------------------
+conc=Concordance(testdata_nonsmoke$stroke,pred_nosmoke)
+conc
+
+
+
+#------------------------------------------------------------------------------------------------
+#             END of Logistic Regression
+#-------------------------------------------------------------------------------------------------
+
+#----------------------------------------------------------------
+#   Tree Based Model
+#------------------------------------------------------------------
+library(ggplot2)   #For plots
+library(lattice)   #For plots and for caret
+library(caret)     #ML package
+library(rpart)     #ulibrary for rpart function for CART
+library(rpart.plot)#plot trees
+library(pROC)      #For ROC curve
+library(maptree)   #For mapping trees (plot)
+library(partykit)   #for ctree, plot
+library(MLmetrics)
+
+ovdata=read.csv("C:/Users/91944/Documents/R/praxis/data/overtrain_smoke.csv")
+undata=read.csv("C:/Users/91944/Documents/R/praxis/data/undertrain_smoke.csv")
+test_data=read.csv("C:/Users/91944/Documents/R/praxis/data/validate_smoke.csv")
+ovndata=read.csv("C:/Users/91944/Documents/R/praxis/data/overtrain_nonsmoke.csv")
+unndata=read.csv("C:/Users/91944/Documents/R/praxis/data/undertrain_nonsmoke.csv")
+ntest_data=read.csv("C:/Users/91944/Documents/R/praxis/data/validate_nonsmoke1.csv")
+
+
+# train a Classification Tree
+fit <- rpart(stroke~., data=ovdata, method="class",cp=0.013) 
+fit2<- rpart(stroke~., data=undata, method="class",cp=0.02)
+
+# display results data-1
+plotcp(fit)
+print(fit)
+plot(fit)
+text(fit)
+rpart.plot(fit,main="Classification Tree",extra = 100)
+
+
+# make predictions
+predictions = predict(fit, test_data[,1:10],type='class')
+#print(predictions)   
+#Confusion Matrix
+
+table(test_data$stroke,predictions)
+Accuracy(predictions,test_data$stroke)
+F1_Score(predictions,test_data$stroke)
+#Convert predictions factor to numbeic
+predictions=as.numeric(as.character(predictions))
+
+#Area under curve
+auc(test_data$stroke,predictions)   
+
+plot(roc(test_data$stroke,predictions))  #Roc plot
+
+
+library(ROCR)
+#Plot ROC curve
+ROCpred <- prediction(predictions,test_data$stroke)
+ROCperf <- performance(ROCpred,"tpr","fpr")
+plot(ROCperf)
+
+
+#display results data-2  #########Uv data
+plotcp(fit2)
+print(fit2)
+plot(fit2)
+text(fit2)
+rpart.plot(fit2,main="Classification Tree",extra = 100)
+
+# make predictions
+predictions = predict(fit2, test_data[,1:10],type='class')
+#print(predictions)   
+#Confusion Matrix
+
+table(test_data$stroke,predictions)
+Accuracy(predictions,test_data$stroke)
+F1_Score(predictions,test_data$stroke)
+#Convert predictions factor to numbeic
+predictions=as.numeric(as.character(predictions))
+
+#Area under curve
+auc(test_data$stroke,predictions)   
+
+plot(roc(test_data$stroke,predictions))  #Roc plot
+
+###################################################NON SMOKE
+
+
+# train a Classification Tree
+fit3<- rpart(stroke~., data=ovndata, method="class",cp=0.014) 
+fit4<- rpart(stroke~., data=unndata, method="class",cp=0.011)
+
+# display results data-1
+plotcp(fit3)
+print(fit3)
+plot(fit3)
+text(fit3)
+rpart.plot(fit3,main="Classification Tree",extra = 101)
+
+
+# make predictions
+predictions = predict(fit3, ntest_data[,1:9],type='class')
+#print(predictions)   
+#Confusion Matrix
+
+table(ntest_data$stroke,predictions)
+Accuracy(predictions,ntest_data$stroke)
+F1_Score(predictions,ntest_data$stroke)
+#Convert predictions factor to numbeic
+predictions=as.numeric(as.character(predictions))
+
+#Area under curve
+auc(ntest_data$stroke,predictions)   
+
+plot(roc(ntest_data$stroke,predictions))  #Roc plot
+
+
+library(ROCR)
+#Plot ROC curve
+ROCpred <- prediction(predictions,test_data$stroke)
+ROCperf <- performance(ROCpred,"tpr","fpr")
+plot(ROCperf)
+
+
+#display results data-4  #########Uv data
+plotcp(fit4)
+print(fit4)
+plot(fit4)
+text(fit4)
+rpart.plot(fit4,main="Classification Tree",extra = 100)
+
+# make predictions
+predictions = predict(fit4, ntest_data[,1:9],type='class')
+#print(predictions)   
+#Confusion Matrix
+
+table(ntest_data$stroke,predictions)
+Accuracy(predictions,ntest_data$stroke)
+F1_Score(predictions,ntest_data$stroke)
+#Convert predictions factor to numbeic
+predictions=as.numeric(as.character(predictions))
+
+#Area under curve
+auc(ntest_data$stroke,predictions)   
+
+plot(roc(ntest_data$stroke,predictions))  #Roc plot
+
+################################################Random Forest
+library(randomForest)
+fit5=randomForest(stroke~., data=ovdata )
+
+# make predictions
+predictions = predict(fit5, newdata=test_data[,1:10],type="class")
+predictions=ifelse(predictions>0.07,1,0)  #Threshold increases then accuracy increases but 1s predicted decreases 
+#print(predictions)   
+#Confusion Matrix
+
+table(test_data$stroke,predictions)
+
+
+Accuracy(predictions,test_data$stroke)
+F1_Score(predictions,test_data$stroke)
+#Convert predictions factor to numbeic
+predictions=as.numeric(as.character(predictions))
+
+#Area under curve
+auc(test_data$stroke,predictions)   
+
+plot(roc(test_data$stroke,predictions))  #Roc plot
